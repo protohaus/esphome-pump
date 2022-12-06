@@ -5,7 +5,7 @@ packages:
 globals:
   - id: pumps_enabled
     type: bool
-    restore_value: no
+    restore_value: yes
     initial_value: "false" 
     
   - id: pump_is_on
@@ -20,7 +20,7 @@ globals:
     
   - id: pump_automation_is_on
     type: bool
-    restore_value: no
+    restore_value: yes
     initial_value: "false"  
     
 switch:   
@@ -42,8 +42,9 @@ switch:
         - globals.set:
             id: pumps_enabled
             value: "false" 
-        - switch.turn_off: ${device_name}_activate
         - switch.turn_off: ${device_name}_automation
+        - switch.turn_off: ${device_name}_activate
+        - switch.turn_off: ${device_name}_single_activation
   
   - platform: template
     name: ${device_name_upper}.activate
@@ -57,11 +58,17 @@ switch:
     turn_on_action:
       then:
         - lambda: |-
-            if (id(${device_name}_enable).state == true)
+            if (id(pumps_enabled) == true)
             {
               id(${device_name}_pump_1).turn_on();
               id(${device_name}_pump_2).turn_on();
               id(pump_is_on) = true;
+            }
+            else
+            {
+              id(${device_name}_pump_1).turn_off();
+              id(${device_name}_pump_2).turn_off();
+              id(pump_is_on) = false;
             }
     turn_off_action:
       then:
@@ -80,16 +87,24 @@ switch:
          return false;
     turn_on_action:
       then:
-        - lambda: |-
-            if (id(${device_name}_enable).state == true)
-            {
-              id(${device_name}_activate).turn_on();
-              id(single_activation_is_on) = true;
-            }
-        - delay: ${pump_automation_interval_length}
-        - lambda: |-
-            id(${device_name}_activate).turn_off();
-            id(single_activation_is_on) = false;
+        if:
+          condition:
+            lambda: |-
+              if(id(pumps_enabled) == true)
+                return true;
+              else
+                return false;
+          then:
+              - lambda: |-
+                  id(${device_name}_activate).turn_on();
+                  id(single_activation_is_on) = true;
+              - delay: !lambda "return id(${device_name}_duration).state * 1000;"
+              - lambda: |-
+                  id(${device_name}_activate).turn_off();
+                  id(single_activation_is_on) = false;
+          else:
+              - lambda: |-
+                 id(single_activation_is_on) = false;
     turn_off_action:
       then:
         - lambda: |-
@@ -116,7 +131,50 @@ switch:
         - globals.set:
             id: pump_automation_is_on
             value: "false"
-            
+
+number:
+  - platform: template
+    min_value: "0"
+    max_value: ${pump_duration_max}
+    step: "1"
+    id: ${device_name}_duration
+    name: ${device_name_upper}.duration
+    optimistic: true
+    mode: box
+    restore_value : true
+    initial_value: ${pump_duration_initial}
+    update_interval: "10s"
+    unit_of_measurement: "s"
+  
+  - platform: template
+    min_value: "1"
+    max_value: ${pump_interval_max}
+    step: "1"
+    id: ${device_name}_interval
+    name: ${device_name_upper}.interval
+    optimistic: true
+    mode: box
+    restore_value : true
+    initial_value: ${pump_interval_initial}
+    update_interval: "10s"
+    unit_of_measurement: "s"
+
+script:
+  - id: ${device_name}_automation_script
+    then:
+    - while:
+        condition:
+          lambda: |-
+            if(id(pump_automation_is_on) == true &&
+               id(pumps_enabled) == true)
+                return true;
+            else
+                return false;
+        then:
+          - switch.turn_on: ${device_name}_single_activation
+          - delay: !lambda "return id(${device_name}_interval).state * 1000;"
+
+         
 interval:
   - interval: 60 s
     then:
@@ -128,24 +186,22 @@ interval:
             lambda: |-
               if (id(boot_finished))
               {
+                id(${device_name}_enable).turn_off();
                 id(${device_name}_activate).turn_off();
                 id(${device_name}_automation).turn_off();
-                id(${device_name}_enable).turn_off();
+                id(${device_name}_single_activation).turn_off();
               }
         
-  - interval: ${pump_automation_interval}
+  - interval: 1 s
     then:
       - if:
           condition:
             lambda: |-
-              if (id(${device_name}_enable).state == true)
+              if(id(${device_name}_automation_script).is_running() == false &&
+                 id(pump_automation_is_on) == true &&
+                 id(pumps_enabled) == true)
                 return true;
               else
                 return false;
           then:
-            - lambda: |-
-                if(id(${device_name}_automation).state == true)
-                  id(${device_name}_activate).turn_on();
-            - delay: ${pump_automation_interval_length}
-            - lambda: |-
-                id(${device_name}_activate).turn_off();  
+            - script.execute: ${device_name}_automation_script
