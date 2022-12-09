@@ -5,7 +5,7 @@ packages:
 globals:
   - id: pumps_enabled
     type: bool
-    restore_value: yes
+    restore_value: no
     initial_value: "false" 
     
   - id: pump_is_on
@@ -20,7 +20,7 @@ globals:
     
   - id: pump_automation_is_on
     type: bool
-    restore_value: yes
+    restore_value: no
     initial_value: "false"  
     
 switch:   
@@ -122,6 +122,7 @@ switch:
          return false;
     turn_on_action:
       then:
+        - script.stop: ${device_name}_automation_script
         - globals.set:
             id: pump_automation_is_on
             value: "true"
@@ -131,6 +132,7 @@ switch:
         - globals.set:
             id: pump_automation_is_on
             value: "false"
+        - script.stop: ${device_name}_automation_script
 
 number:
   - platform: template
@@ -145,6 +147,9 @@ number:
     initial_value: ${pump_duration_initial}
     update_interval: "10s"
     unit_of_measurement: "s"
+    on_value:
+      then:
+        - script.stop: ${device_name}_automation_script
   
   - platform: template
     min_value: "1"
@@ -158,6 +163,9 @@ number:
     initial_value: ${pump_interval_initial}
     update_interval: "10s"
     unit_of_measurement: "s"
+    on_value:
+      then:
+        - script.stop: ${device_name}_automation_script
 
 script:
   - id: ${device_name}_automation_script
