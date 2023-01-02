@@ -5,7 +5,7 @@ packages:
 globals:
   - id: pumps_enabled
     type: bool
-    restore_value: no
+    restore_value: yes
     initial_value: "false" 
     
   - id: pump_is_on
