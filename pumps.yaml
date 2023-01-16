@@ -181,24 +181,7 @@ script:
         then:
           - switch.turn_on: ${device_name}_single_activation
           - delay: !lambda "return id(${device_name}_interval).state * 1000;"
-
-         
 interval:
-  - interval: 60 s
-    then:
-      - if:
-          condition:
-            not:
-              api.connected:
-          then:
-            lambda: |-
-              if (id(boot_finished))
-              {
-                id(${device_name}_enable).turn_off();
-                id(${device_name}_activate).turn_off();
-                id(${device_name}_automation).turn_off();
-                id(${device_name}_single_activation).turn_off();
-              }
         
   - interval: 1 s
     then:
